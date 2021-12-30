@@ -1,0 +1,67 @@
+public final class TelephoneManagerHook{
+
+  private TelephoneManagerHook (){}
+  
+  public static void hook(){
+  
+    try{
+      //获取对应binder
+      Class servicesManager = Class.forName("android.os.ServiceManager");
+      Method getService = servicesManager.getDeclaredMethod("getService", String.class);
+      IBinder telephonyBinder = (IBinder) getService.invoke(null, Context.TELEPHONY_SERVICE);
+    
+      //获取对应manager
+      Object telephonyManager = Class.forName("com.android.internal.telephony.ITelephony$Stub").getDeclaredMethod("asInterface",IBinder.class).invoke(null,telephonyBinder)
+    
+      //创建proxy manager
+      InvocationHandler fakeTelephonyManagerHandler  = (proxy, menthod, args) -> {
+        System.out.println("invoke method"+ method.getName());
+        
+        if("getImei".equals(method.getName())){
+          return null;
+        }
+      
+        if("getDeviceId".equals(method.getName())){
+          return null;
+        }
+        
+        
+        
+        try{
+          return method.invoke(telephonyManager, args);
+        }catch(InvocationTargetException e){
+          throw e.getTargetException();
+        }
+     
+      };
+      
+      
+      Object proxyTelephonyManager = Proxy.newProxyInstance(servicesManager.getClassLoader(),
+                                                              new Class[]{Class.forName("com.android.internal.telephony.ITelephony")},
+                                                                fakeTelephonyManagerHandler);
+                                                                
+                                          
+      //创建proxy binder
+      InvocationHandler fakeIBinderHandler =  (proxy, menthod, args) -> {
+        if(method.getName().equals("queryLocalInterface")){
+          return proxyTelephonyManager;
+        }else{
+          return method.invoke(telephonyBinder, args);
+        }
+      };
+      
+      Object proxyTelephonyBinder = Proxy.newProxyInstance(servicesManager.getClassLoader(),
+                                                              new Class[]{IBinder.class},
+                                                                fakeIBinderHandler);
+      
+      //启动proxy telephony binder
+      Field serviceManagerCache = servicesManager.getDeclaredField("sCache");
+      serviceManagerCache.setAccessible(true);
+      Map<String, IBinder> sCache = (Map<String, IBinder>)serviceManagerCache.get(null);
+      sCache.put(Context.TELEPHONY_SERVICE, (IBinder)proxyTelephonyBinder);
+      
+    }catch(Exception e){
+      e.printStackTrace();
+    }
+  }
+}
